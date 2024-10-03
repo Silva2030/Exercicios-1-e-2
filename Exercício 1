@@ -1,0 +1,103 @@
+#include <stdlib.h>    // Biblioteca padrão para funções como rand(), malloc(), etc.
+#include <stdio.h>     // Biblioteca para funções de entrada e saída, como printf().
+#include <pthread.h>   // Biblioteca para trabalhar com threads em C.
+#include <semaphore.h> // Biblioteca para trabalhar com semáforos.
+#include <unistd.h>    // Fornece funções como sleep() para pausar a execução por alguns segundos.
+
+#define NUMCONS 1      // Número de consumidores (threads consumidoras).
+#define NUMPROD 2      // Número de produtores (threads produtoras).
+#define BUFFERSIZE 1000 // Tamanho do buffer compartilhado entre produtores e consumidores.
+
+pthread_t cons[NUMCONS];  // Array para armazenar os identificadores das threads consumidoras.
+pthread_t prod[NUMPROD];  // Array para armazenar os identificadores das threads produtoras.
+
+pthread_mutex_t buffer_mutex;  // Mutex para proteger o acesso ao buffer compartilhado.
+int buffer[BUFFERSIZE];        // Buffer compartilhado entre as threads produtoras e consumidoras.
+int currentidx;                // Índice atual do buffer, indicando a próxima posição de inserção/remoção.
+
+sem_t buffer_full, buffer_empty;  // Semáforos para controlar o estado de cheio e vazio do buffer.
+
+// Função executada pelas threads produtoras.
+void *produtor(void *arg) {
+    int n;
+    while(1) {
+        n = rand() % 1000;  // Gera um número aleatório entre 0 e 999.
+
+        // Espera até que haja espaço disponível no buffer (semáforo buffer_full).
+        sem_wait(&buffer_full);
+
+        // Bloqueia o mutex para garantir que apenas uma thread acesse o buffer por vez.
+        pthread_mutex_lock(&buffer_mutex);
+
+        buffer[currentidx++] = n;  // Adiciona o número gerado ao buffer.
+        
+        // Desbloqueia o mutex após a operação.
+        pthread_mutex_unlock(&buffer_mutex);
+
+        // Incrementa o semáforo buffer_empty, indicando que o buffer agora tem pelo menos um item.
+        sem_post(&buffer_empty);
+
+        // Exibe a mensagem informando que um número foi produzido.
+        printf("Produzindo numero %d\n", n);
+
+        // Pausa a execução por 1 a 5 segundos antes de produzir outro número.
+        sleep(1 + rand() % 5);
+    }
+}
+
+// Função executada pelas threads consumidoras.
+void *consumidor(void *arg) {
+    int n;
+    while(1) {
+        // Espera até que haja algum item disponível no buffer (semáforo buffer_empty).
+        sem_wait(&buffer_empty);
+
+        // Bloqueia o mutex para garantir que apenas uma thread consuma do buffer por vez.
+        pthread_mutex_lock(&buffer_mutex);
+
+        n = buffer[--currentidx];  // Remove o último item inserido no buffer.
+
+        // Desbloqueia o mutex após a operação.
+        pthread_mutex_unlock(&buffer_mutex);
+
+        // Incrementa o semáforo buffer_full, indicando que há espaço disponível no buffer.
+        sem_post(&buffer_full);
+
+        // Exibe a mensagem informando que um número foi consumido.
+        printf("Consumindo numero %d\n", n);
+
+        // Pausa a execução por 1 a 5 segundos antes de consumir outro número.
+        sleep(1 + (rand() % 5));
+    }
+}
+
+int main(int argc, char **argv) {
+    int i;
+
+    // Inicializa o mutex que será usado para proteger o buffer compartilhado.
+    pthread_mutex_init(&buffer_mutex, NULL);
+
+    // Inicializa o semáforo buffer_full com o valor BUFFERSIZE (capacidade do buffer).
+    sem_init(&buffer_full, 0, BUFFERSIZE);
+
+    // Inicializa o semáforo buffer_empty com valor 0, já que o buffer começa vazio.
+    sem_init(&buffer_empty, 0, 0);
+
+    // Cria as threads consumidoras.
+    for(i = 0; i < NUMCONS; i++)
+        pthread_create(&(cons[i]), NULL, consumidor, NULL);  // Inicia a thread consumidora.
+
+    // Cria as threads produtoras.
+    for(i = 0; i < NUMPROD; i++)
+        pthread_create(&(prod[i]), NULL, produtor, NULL);  // Inicia as threads produtoras.
+
+    // Espera pela conclusão das threads consumidoras (não acontece no loop infinito).
+    for(i = 0; i < NUMCONS; i++)
+        pthread_join(cons[i], NULL);  // Espera a finalização da thread consumidora.
+
+    // Espera pela conclusão das threads produtoras (não acontece no loop infinito).
+    for(i = 0; i < NUMPROD; i++)
+        pthread_join(prod[i], NULL);  // Espera a finalização das threads produtoras.
+
+    return 0;
+}
