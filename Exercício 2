@@ -1,0 +1,57 @@
+#include <stdio.h>
+#include <pthread.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define ROWS 3   
+#define COLS 7   
+
+int matrix[ROWS][COLS];   
+int row_sums[ROWS];       
+
+void* sum_row(void* arg) {
+    int row = *(int*)arg;  
+    int sum = 0;
+    for (int i = 0; i < COLS; i++) {
+        sum += matrix[row][i];
+    }
+    row_sums[row] = sum;   
+    pthread_exit(NULL);    
+}
+
+int main() {
+    pthread_t threads[ROWS];  
+    int row_indices[ROWS];    
+
+    srand(time(NULL));
+    for (int i = 0; i < ROWS; i++) {
+        for (int j = 0; j < COLS; j++) {
+            matrix[i][j] = rand() % 10;
+        }
+    }
+
+    printf("Matriz 3x7:\n");
+    for (int i = 0; i < ROWS; i++) {
+        for (int j = 0; j < COLS; j++) {
+            printf("%d ", matrix[i][j]);
+        }
+        printf("\n");
+    }
+
+    for (int i = 0; i < ROWS; i++) {
+        row_indices[i] = i;  
+        pthread_create(&threads[i], NULL, sum_row, (void*)&row_indices[i]);
+    }
+
+    for (int i = 0; i < ROWS; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    printf("\nSomas das linhas:\n");
+    for (int i = 0; i < ROWS; i++) {
+        printf("Soma da linha %d: %d\n", i, row_sums[i]);
+    }
+
+    return 0;
+}
+
